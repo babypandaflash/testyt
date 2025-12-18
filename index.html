@@ -13,6 +13,18 @@
 <!-- Web3 / Ethers.js for Wallet -->
 <script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js"></script>
 
+<!-- BIP39 for Mnemonic -->
+<script src="https://cdn.jsdelivr.net/npm/bip39@3.1.0/index.js"></script>
+
+<!-- Solana Web3.js -->
+<script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+
+<!-- TweetNaCl for Solana keypair -->
+<script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
+
+<!-- ed25519-hd-key for Solana derivation -->
+<script src="https://cdn.jsdelivr.net/npm/ed25519-hd-key@1.3.0/lib/index.min.js"></script>
+
 <style>
 :root{
 --bg:#0b0e14;--card:#121826;--primary:#6cf2c2;
@@ -223,9 +235,24 @@ display:flex;align-items:center;gap:12px;margin:20px 0;color:var(--muted);font-s
 <h3>Your Profile</h3>
 <p><strong>Email/ID</strong><br><span id="userEmail"></span></p>
 <p><strong>Login Method</strong><br><span id="loginMethod"></span></p>
-<p id="walletInfo" style="display:none"><strong>Wallet</strong><br><span id="walletAddress"></span></p>
+<p id="evmWalletInfo"><strong>EVM Wallet</strong><br><span id="evmWalletAddress"></span></p>
+<p id="solanaWalletInfo"><strong>Solana Wallet</strong><br><span id="solanaWalletAddress"></span></p>
+<p id="walletInfo" style="display:none"><strong>Connected Wallet</strong><br><span id="walletAddress"></span></p>
+<button id="showMnemonicBtn" style="margin-top:8px">Show Mnemonic</button><br/>
+<button id="exportWalletBtn" style="margin-top:8px">Export Wallet Info</button><br/>
 <button id="logoutBtn">Logout</button><br/>
 <button id="closeProfile">Close</button>
+</div>
+</div>
+
+<!-- MNEMONIC POPUP -->
+<div class="popup" id="mnemonicPopup">
+<div class="popup-card" style="max-width:480px">
+<h3>⚠️ Secret Recovery Phrase</h3>
+<p style="color:var(--text);background:var(--bg);padding:16px;border-radius:12px;font-size:.9rem;word-break:break-word;line-height:1.6" id="mnemonicPhrase"></p>
+<p style="color:#ff6b6b;font-size:.85rem;margin-top:12px">⚠️ Never share this phrase! Anyone with this phrase can access your funds.</p>
+<button id="copyMnemonicBtn">Copy to Clipboard</button><br/>
+<button id="closeMnemonic">Close</button>
 </div>
 </div>
 
@@ -275,6 +302,98 @@ const errorMsg = document.getElementById('errorMsg');
 const successMsg = document.getElementById('successMsg');
 
 let currentEmail = '';
+let currentWallets = null;
+
+// Generate EVM and Solana wallets from ONE mnemonic
+async function generateWallets(userId) {
+  try {
+    console.log('Generating wallets from mnemonic for user:', userId);
+    
+    // Generate 12-word mnemonic phrase
+    const mnemonic = bip39.generateMnemonic();
+    console.log('Mnemonic generated:', mnemonic);
+    
+    // Derive seed from mnemonic
+    const seed = await bip39.mnemonicToSeed(mnemonic);
+    
+    // ===== Generate EVM Wallet (Ethereum, BSC, Polygon, etc) =====
+    // Use BIP44 path for Ethereum: m/44'/60'/0'/0/0
+    const hdNode = ethers.utils.HDNode.fromSeed(seed);
+    const evmPath = "m/44'/60'/0'/0/0";
+    const evmWallet = hdNode.derivePath(evmPath);
+    const evmAddress = evmWallet.address;
+    const evmPrivateKey = evmWallet.privateKey;
+    
+    console.log('EVM Wallet generated:', evmAddress);
+    
+    // ===== Generate Solana Wallet =====
+    // Use BIP44 path for Solana: m/44'/501'/0'/0'
+    const solanaPath = "m/44'/501'/0'/0'";
+    const solanaSeed = seed.slice(0, 32); // Solana uses first 32 bytes
+    
+    // Derive Solana keypair from seed using ed25519-hd-key
+    const derivedSeed = EDKey.derivePath(solanaPath, seed.toString('hex')).key;
+    const solanaKeypair = nacl.sign.keyPair.fromSeed(derivedSeed);
+    
+    const solanaPublicKey = solanaKeypair.publicKey;
+    const solanaSecretKey = solanaKeypair.secretKey;
+    const solanaAddress = new solanaWeb3.PublicKey(solanaPublicKey).toBase58();
+    
+    console.log('Solana Wallet generated:', solanaAddress);
+    
+    // Store encrypted wallets in user metadata
+    const walletData = {
+      mnemonic: mnemonic, // In production, ENCRYPT this!
+      evm_address: evmAddress,
+      evm_private_key: evmPrivateKey, // Derived from mnemonic
+      evm_path: evmPath,
+      solana_address: solanaAddress,
+      solana_secret_key: Array.from(solanaSecretKey), // Derived from mnemonic
+      solana_path: solanaPath,
+      created_at: new Date().toISOString()
+    };
+    
+    // Update user metadata
+    const { data, error } = await supabaseClient.auth.updateUser({
+      data: {
+        wallets: walletData
+      }
+    });
+    
+    if (error) {
+      console.error('Error saving wallets:', error);
+      throw error;
+    }
+    
+    console.log('Wallets saved to user metadata');
+    
+    return walletData;
+    
+  } catch (error) {
+    console.error('Error generating wallets:', error);
+    throw error;
+  }
+}
+
+// Get or create wallets for user
+async function getOrCreateWallets(user) {
+  try {
+    // Check if user already has wallets
+    if (user.user_metadata?.wallets) {
+      console.log('User already has wallets');
+      return user.user_metadata.wallets;
+    }
+    
+    // Generate new wallets
+    console.log('Generating new wallets for user');
+    const wallets = await generateWallets(user.id);
+    return wallets;
+    
+  } catch (error) {
+    console.error('Error in getOrCreateWallets:', error);
+    return null;
+  }
+}
 
 // Helper functions
 function showError(message) {
@@ -353,7 +472,11 @@ document.getElementById('verifyOtpBtn').onclick = async () => {
     
     if (error) throw error;
     
-    showUserProfile(data.user, 'Email OTP');
+    // Generate wallets for new user
+    const wallets = await getOrCreateWallets(data.user);
+    currentWallets = wallets;
+    
+    showUserProfile(data.user, 'Email OTP', wallets);
   } catch (error) {
     showError('Invalid OTP code. Please try again.');
   }
@@ -443,66 +566,252 @@ document.getElementById('walletBtn').onclick = async () => {
   }
   
   try {
+    console.log('Connecting to MetaMask...');
     const provider = new ethers.providers.Web3Provider(window.ethereum);
     const accounts = await provider.send("eth_requestAccounts", []);
     const address = accounts[0];
     const signer = provider.getSigner();
     
+    console.log('Wallet connected:', address);
+    
     // Create a message to sign
     const message = `Sign this message to login to Ugly Cat Chain\n\nWallet: ${address}\nTimestamp: ${Date.now()}`;
+    console.log('Requesting signature...');
     const signature = await signer.signMessage(message);
     
-    // Here you would typically verify the signature on your backend
-    // For now, we'll just show the profile with wallet info
+    console.log('Signature received:', signature);
+    
+    // Create an anonymous user and link wallet
+    const { data: authData, error: authError } = await supabaseClient.auth.signInAnonymously();
+    
+    if (authError) {
+      console.error('Auth error:', authError);
+      throw authError;
+    }
+    
+    console.log('Anonymous user created:', authData);
+    
+    // Update user metadata with wallet info
+    const { data: updateData, error: updateError } = await supabaseClient.auth.updateUser({
+      data: {
+        wallet_address: address,
+        wallet_signature: signature,
+        login_method: 'wallet'
+      }
+    });
+    
+    if (updateError) {
+      console.error('Update error:', updateError);
+      throw updateError;
+    }
+    
+    console.log('User metadata updated:', updateData);
+    
+    // Show profile
     showUserProfile({
-      id: address,
-      email: address,
-      user_metadata: { wallet: address }
+      id: authData.user.id,
+      email: `${address.substring(0, 6)}...${address.substring(address.length - 4)}`,
+      user_metadata: { 
+        wallet_address: address,
+        login_method: 'wallet'
+      }
     }, 'Wallet', address);
     
+    showSuccess('Wallet connected successfully!');
+    
   } catch (error) {
+    console.error('Wallet connection error:', error);
     if (error.code === 4001) {
       showError('Wallet connection cancelled');
+    } else if (error.code === -32602) {
+      showError('Invalid wallet request');
     } else {
-      showError('Failed to connect wallet: ' + error.message);
+      showError('Failed to connect wallet: ' + (error.message || 'Unknown error'));
     }
   }
 };
 
 // Show user profile
-function showUserProfile(user, method, wallet = null) {
+function showUserProfile(user, method, wallets = null) {
+  console.log('Showing profile for user:', user);
   loginCard.style.display = 'none';
   avatar.style.display = 'flex';
   
-  const displayText = user.email || user.id;
+  // Get wallet from user metadata if available
+  const connectedWallet = user.user_metadata?.wallet_address;
+  const generatedWallets = wallets || user.user_metadata?.wallets;
+  
+  // Display email or wallet
+  let displayText = user.email || connectedWallet || user.id;
+  
+  // If it's a connected wallet address, show shortened version
+  if (connectedWallet && !user.email) {
+    displayText = `${connectedWallet.substring(0, 6)}...${connectedWallet.substring(connectedWallet.length - 4)}`;
+  }
+  
   avatar.textContent = displayText[0].toUpperCase();
   
   document.getElementById('userEmail').textContent = displayText;
   document.getElementById('loginMethod').textContent = method;
   
-  if (wallet) {
+  // Show connected wallet (MetaMask)
+  if (connectedWallet) {
     document.getElementById('walletInfo').style.display = 'block';
-    document.getElementById('walletAddress').textContent = wallet.substring(0, 6) + '...' + wallet.substring(wallet.length - 4);
+    document.getElementById('walletAddress').textContent = `${connectedWallet.substring(0, 6)}...${connectedWallet.substring(connectedWallet.length - 4)}`;
   } else {
     document.getElementById('walletInfo').style.display = 'none';
+  }
+  
+  // Show generated wallets (EVM & Solana)
+  if (generatedWallets) {
+    currentWallets = generatedWallets;
+    
+    // EVM Wallet
+    if (generatedWallets.evm_address) {
+      document.getElementById('evmWalletInfo').style.display = 'block';
+      const evmAddr = generatedWallets.evm_address;
+      document.getElementById('evmWalletAddress').textContent = `${evmAddr.substring(0, 6)}...${evmAddr.substring(evmAddr.length - 4)}`;
+    }
+    
+    // Solana Wallet
+    if (generatedWallets.solana_address) {
+      document.getElementById('solanaWalletInfo').style.display = 'block';
+      const solAddr = generatedWallets.solana_address;
+      document.getElementById('solanaWalletAddress').textContent = `${solAddr.substring(0, 6)}...${solAddr.substring(solAddr.length - 4)}`;
+    }
+    
+    document.getElementById('exportWalletBtn').style.display = 'inline-block';
+  } else {
+    document.getElementById('evmWalletInfo').style.display = 'none';
+    document.getElementById('solanaWalletInfo').style.display = 'none';
+    document.getElementById('exportWalletBtn').style.display = 'none';
   }
 }
 
 // Check if user is already logged in
-supabaseClient.auth.getSession().then(({ data: { session } }) => {
+supabaseClient.auth.getSession().then(async ({ data: { session } }) => {
+  console.log('Session check:', session);
   if (session) {
-    const method = session.user.app_metadata.provider || 'Email OTP';
-    showUserProfile(session.user, method.charAt(0).toUpperCase() + method.slice(1));
+    const method = session.user.user_metadata?.login_method || session.user.app_metadata.provider || 'Email OTP';
+    const walletAddress = session.user.user_metadata?.wallet_address;
+    
+    if (method === 'wallet' || walletAddress) {
+      showUserProfile(session.user, 'Wallet', null);
+    } else {
+      // Generate wallets if user doesn't have them yet
+      const wallets = await getOrCreateWallets(session.user);
+      showUserProfile(session.user, method.charAt(0).toUpperCase() + method.slice(1), wallets);
+    }
   }
 });
 
 // Listen for auth state changes
-supabaseClient.auth.onAuthStateChange((event, session) => {
+supabaseClient.auth.onAuthStateChange(async (event, session) => {
+  console.log('Auth state changed:', event, session);
   if (event === 'SIGNED_IN' && session) {
-    const method = session.user.app_metadata.provider || 'Email OTP';
-    showUserProfile(session.user, method.charAt(0).toUpperCase() + method.slice(1));
+    const method = session.user.user_metadata?.login_method || session.user.app_metadata.provider || 'Email OTP';
+    const walletAddress = session.user.user_metadata?.wallet_address;
+    
+    if (method === 'wallet' || walletAddress) {
+      showUserProfile(session.user, 'Wallet', null);
+    } else {
+      // Generate wallets for new user
+      const wallets = await getOrCreateWallets(session.user);
+      showUserProfile(session.user, method.charAt(0).toUpperCase() + method.slice(1), wallets);
+    }
+  } else if (event === 'SIGNED_OUT') {
+    loginCard.style.display = 'block';
+    avatar.style.display = 'none';
+    currentWallets = null;
   }
 });
+
+// Handle OAuth redirect callback
+window.addEventListener('load', async () => {
+  const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  const accessToken = hashParams.get('access_token');
+  
+  if (accessToken) {
+    console.log('OAuth callback detected, processing...');
+    try {
+      const { data: { session }, error } = await supabaseClient.auth.getSession();
+      if (session) {
+        const method = session.user.app_metadata.provider || 'OAuth';
+        
+        // Generate wallets for OAuth user
+        const wallets = await getOrCreateWallets(session.user);
+        
+        showUserProfile(session.user, method.charAt(0).toUpperCase() + method.slice(1), wallets);
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    } catch (error) {
+      console.error('Error processing OAuth callback:', error);
+    }
+  }
+});
+
+// Export wallet private keys
+document.getElementById('exportWalletBtn').onclick = () => {
+  if (!currentWallets) {
+    showError('No wallets to export');
+    return;
+  }
+  
+  const exportData = {
+    mnemonic: currentWallets.mnemonic,
+    evm: {
+      address: currentWallets.evm_address,
+      privateKey: currentWallets.evm_private_key,
+      derivationPath: currentWallets.evm_path
+    },
+    solana: {
+      address: currentWallets.solana_address,
+      secretKey: currentWallets.solana_secret_key,
+      derivationPath: currentWallets.solana_path
+    },
+    warning: '⚠️ KEEP THIS SAFE! Never share your mnemonic or private keys with anyone!',
+    info: 'You can restore both wallets using the mnemonic phrase in any compatible wallet.'
+  };
+  
+  // Create downloadable JSON file
+  const dataStr = JSON.stringify(exportData, null, 2);
+  const dataBlob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(dataBlob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'uglycat-wallet-backup.json';
+  link.click();
+  URL.revokeObjectURL(url);
+  
+  showSuccess('Wallet backup exported! Keep your mnemonic phrase safe!');
+};
+
+// Show Mnemonic Popup
+document.getElementById('showMnemonicBtn').onclick = () => {
+  if (!currentWallets || !currentWallets.mnemonic) {
+    showError('No mnemonic available');
+    return;
+  }
+  
+  document.getElementById('mnemonicPhrase').textContent = currentWallets.mnemonic;
+  document.getElementById('mnemonicPopup').style.display = 'flex';
+};
+
+// Close Mnemonic Popup
+document.getElementById('closeMnemonic').onclick = () => {
+  document.getElementById('mnemonicPopup').style.display = 'none';
+};
+
+// Copy Mnemonic
+document.getElementById('copyMnemonicBtn').onclick = () => {
+  const mnemonic = currentWallets.mnemonic;
+  navigator.clipboard.writeText(mnemonic).then(() => {
+    showSuccess('Mnemonic copied to clipboard!');
+  }).catch(err => {
+    showError('Failed to copy mnemonic');
+  });
+};
 
 // Avatar click - show profile
 avatar.onclick = () => profilePopup.style.display = 'flex';
@@ -518,6 +827,7 @@ document.getElementById('logoutBtn').onclick = async () => {
   otpInput.value = '';
   emailSection.style.display = 'block';
   otpSection.style.display = 'none';
+  currentWallets = null;
   hideMessages();
 };
 </script>
