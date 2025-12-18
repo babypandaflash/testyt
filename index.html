@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Early Access | Ugly Cat Chain</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+
+<!-- Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Web3 / Ethers.js for Wallet -->
+<script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js"></script>
+
+<style>
+:root{
+--bg:#0b0e14;--card:#121826;--primary:#6cf2c2;
+--secondary:#8aa2ff;--text:#e6e9f0;--muted:#9aa4bf
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:Arial}
+body{background:var(--bg);color:var(--text)}
+
+.topbar{
+position:fixed;top:0;left:0;width:100%;height:64px;
+background:#0b0e14;border-bottom:1px solid #1c2335;
+display:flex;align-items:center;justify-content:space-between;
+padding:0 20px;z-index:1000
+}
+.topbar img{width:36px}
+.title{position:absolute;left:50%;transform:translateX(-50%);font-weight:bold}
+.menu-btn{font-size:24px;cursor:pointer}
+
+.hamburger-menu{
+position:fixed;top:64px;right:5px;width:210px;
+background:var(--card);border-radius:16px;
+padding:16px;display:none;flex-direction:column;gap:10px;
+box-shadow:0 20px 40px rgba(0,0,0,.5);z-index:1200
+}
+.hamburger-menu a{
+color:var(--text);text-decoration:none;font-weight:bold;
+padding:12px;border-radius:12px
+}
+.hamburger-menu a:hover{background:rgba(108,242,194,.15);color:var(--primary)}
+
+.profile-avatar{
+position:absolute;right:20px;top:72px;
+width:46px;height:46px;border-radius:50%;
+background:linear-gradient(135deg,var(--primary),var(--secondary));
+display:none;align-items:center;justify-content:center;
+font-weight:bold;color:#000;cursor:pointer;z-index:1100
+}
+
+header{
+margin-top:64px;padding:80px 20px;text-align:center;
+background:linear-gradient(135deg,#0b0e14,#121826)
+}
+header h1{font-size:2.6rem;margin-bottom:16px}
+header p{color:var(--muted);max-width:600px;margin:auto}
+
+.login-card{
+max-width:420px;margin:60px auto;
+background:var(--card);padding:32px;border-radius:20px;
+box-shadow:0 20px 50px rgba(0,0,0,.4);text-align:center
+}
+.login-card h2{margin-bottom:12px;color:var(--primary)}
+.login-card p{font-size:.95rem;color:var(--muted);margin-bottom:28px}
+
+.login-btn{
+width:100%;padding:14px;border-radius:999px;border:none;
+font-weight:bold;font-size:1rem;cursor:pointer;color:#000;
+margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:10px
+}
+.btn-email{background:linear-gradient(135deg,var(--primary),var(--secondary))}
+.btn-google{background:#fff;color:#000}
+.btn-twitter{background:#1DA1F2;color:#fff}
+.btn-discord{background:#5865F2;color:#fff}
+.btn-wallet{background:linear-gradient(135deg,#ff6b6b,#ffa500);color:#fff}
+
+.input-field{
+width:100%;padding:14px;border-radius:12px;border:1px solid #1c2335;
+background:var(--bg);color:var(--text);margin-bottom:12px;font-size:1rem
+}
+.error-msg{color:#ff6b6b;font-size:.85rem;margin-top:8px;display:none}
+.success-msg{color:var(--primary);font-size:.85rem;margin-top:8px;display:none}
+
+.otp-section{display:none}
+.back-link{color:var(--primary);cursor:pointer;font-size:.9rem;margin-top:12px;display:inline-block}
+
+.social-bar{
+display:flex;justify-content:center;gap:22px;
+padding:40px 20px 20px
+}
+.social-bar a{
+width:46px;height:46px;border-radius:50%;
+background:var(--card);display:flex;align-items:center;justify-content:center;
+color:var(--text);font-size:20px;text-decoration:none
+}
+.social-bar a:hover{background:var(--primary);color:#000}
+
+footer{
+padding:40px 20px;text-align:center;
+color:var(--muted);border-top:1px solid #1c2335
+}
+
+/* POPUP */
+.popup{
+position:fixed;inset:0;background:rgba(0,0,0,.7);
+display:none;align-items:center;justify-content:center;z-index:2000
+}
+.popup-card{
+background:var(--card);padding:36px;border-radius:20px;
+text-align:center;max-width:340px;width:90%
+}
+.popup-card h3{color:var(--primary);margin-bottom:12px}
+.popup-card p{font-size:.9rem;color:var(--muted);word-break:break-all;margin-bottom:12px}
+.popup-card button{
+margin-top:16px;padding:10px 22px;border-radius:999px;
+border:none;background:var(--primary);cursor:pointer;color:#000;font-weight:bold
+}
+.divider{
+display:flex;align-items:center;gap:12px;margin:20px 0;color:var(--muted);font-size:.9rem
+}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:#1c2335}
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+<img src="https://raw.githubusercontent.com/babypandaflash/image/refs/heads/main/logo.png"/>
+<div class="title">Ugly Cat Chain</div>
+<div class="menu-btn">☰</div>
+</div>
+
+<div class="profile-avatar" id="avatar">U</div>
+
+<div class="hamburger-menu" id="hamburgerMenu">
+<a href="index.html">Home</a>
+<a href="earlyaccess.html">Early Access</a>
+<a href="#" class="coming-soon">UglyCat App</a>
+<a href="#" class="coming-soon">UglyCat Wallet</a>
+<a href="#" class="coming-soon">UglyCat NFT</a>
+<a href="#" class="coming-soon">Marketplace</a>
+<a href="#" class="coming-soon">Tokenomics</a>
+<a href="roadmap.html">Roadmap</a>
+</div>
+
+<header>
+<h1>Early Community Access</h1>
+<p>Join the earliest members of Ugly Cat Chain and unlock exclusive NFT utilities, early features, and future rewards.</p>
+</header>
+
+<div class="login-card" id="loginCard">
+<h2>Join Early Community</h2>
+<p>Sign in using your preferred method to secure your early access spot.</p>
+
+<!-- Email OTP Section -->
+<div id="emailSection">
+<input type="email" id="emailInput" class="input-field" placeholder="Enter your email" />
+<button class="login-btn btn-email" id="sendOtpBtn">
+<i class="fas fa-envelope"></i> Continue with Email
+</button>
+</div>
+
+<!-- OTP Verification Section -->
+<div class="otp-section" id="otpSection">
+<input type="text" id="otpInput" class="input-field" placeholder="Enter 6-digit OTP code" maxlength="6" />
+<button class="login-btn btn-email" id="verifyOtpBtn">
+<i class="fas fa-check"></i> Verify OTP
+</button>
+<span class="back-link" id="backToEmail">← Back to email</span>
+</div>
+
+<div class="error-msg" id="errorMsg"></div>
+<div class="success-msg" id="successMsg"></div>
+
+<div class="divider">OR</div>
+
+<!-- Social Login Buttons -->
+<button class="login-btn btn-google" id="googleBtn">
+<i class="fa-brands fa-google"></i> Continue with Google
+</button>
+
+<button class="login-btn btn-twitter" id="twitterBtn">
+<i class="fa-brands fa-x-twitter"></i> Continue with Twitter
+</button>
+
+<button class="login-btn btn-discord" id="discordBtn">
+<i class="fa-brands fa-discord"></i> Continue with Discord
+</button>
+
+<div class="divider">OR</div>
+
+<!-- Wallet Connect Button -->
+<button class="login-btn btn-wallet" id="walletBtn">
+<i class="fas fa-wallet"></i> Connect Wallet
+</button>
+</div>
+
+<div class="social-bar">
+<a href="#"><i class="fa-brands fa-x-twitter"></i></a>
+<a href="#"><i class="fa-brands fa-discord"></i></a>
+<a href="#"><i class="fa-brands fa-instagram"></i></a>
+<a href="#"><i class="fa-brands fa-telegram"></i></a>
+<a href="#"><i class="fa-brands fa-youtube"></i></a>
+</div>
+
+<footer>© 2025 Ugly Cat Chain. All rights reserved.</footer>
+
+<!-- COMING SOON -->
+<div class="popup" id="comingSoonPopup">
+<div class="popup-card">
+<h3>Coming Soon</h3>
+<p>This feature is under development.</p>
+<button id="closeComing">Close</button>
+</div>
+</div>
+
+<!-- PROFILE POPUP -->
+<div class="popup" id="profilePopup">
+<div class="popup-card">
+<h3>Your Profile</h3>
+<p><strong>Email/ID</strong><br><span id="userEmail"></span></p>
+<p><strong>Login Method</strong><br><span id="loginMethod"></span></p>
+<p id="walletInfo" style="display:none"><strong>Wallet</strong><br><span id="walletAddress"></span></p>
+<button id="logoutBtn">Logout</button><br/>
+<button id="closeProfile">Close</button>
+</div>
+</div>
+
+<script>
+// KONFIGURASI SUPABASE - GANTI DENGAN CREDENTIALS ANDA
+const SUPABASE_URL = 'https://fpnxffmoyvmwqkuorjba.supabase.co'; // Ganti dengan URL Supabase Anda
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwbnhmZm1veXZtd3FrdW9yamJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwNzcyMDksImV4cCI6MjA4MTY1MzIwOX0.PTzCzbDxrJeub92_FmcEytMm-y9x3wBHFzSan71P5Q8'; // Ganti dengan Anon Key Anda
+
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* Hamburger */
+const menuBtn = document.querySelector('.menu-btn');
+const menu = document.getElementById('hamburgerMenu');
+menuBtn.onclick = () => menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
+document.addEventListener('click', e => {
+  if (!menu.contains(e.target) && !menuBtn.contains(e.target)) menu.style.display = 'none'
+});
+
+/* Coming Soon */
+const comingSoonPopup = document.getElementById('comingSoonPopup');
+document.querySelectorAll('.coming-soon').forEach(el => {
+  el.onclick = e => { e.preventDefault(); comingSoonPopup.style.display = 'flex'; menu.style.display = 'none' }
+});
+document.getElementById('closeComing').onclick = () => comingSoonPopup.style.display = 'none';
+
+/* UI Elements */
+const loginCard = document.getElementById('loginCard');
+const avatar = document.getElementById('avatar');
+const profilePopup = document.getElementById('profilePopup');
+const emailInput = document.getElementById('emailInput');
+const otpInput = document.getElementById('otpInput');
+const emailSection = document.getElementById('emailSection');
+const otpSection = document.getElementById('otpSection');
+const errorMsg = document.getElementById('errorMsg');
+const successMsg = document.getElementById('successMsg');
+
+let currentEmail = '';
+
+// Helper functions
+function showError(message) {
+  errorMsg.textContent = message;
+  errorMsg.style.display = 'block';
+  successMsg.style.display = 'none';
+}
+
+function showSuccess(message) {
+  successMsg.textContent = message;
+  successMsg.style.display = 'block';
+  errorMsg.style.display = 'none';
+}
+
+function hideMessages() {
+  errorMsg.style.display = 'none';
+  successMsg.style.display = 'none';
+}
+
+// Send OTP to Email
+document.getElementById('sendOtpBtn').onclick = async () => {
+  const email = emailInput.value.trim();
+  hideMessages();
+  
+  if (!email) {
+    showError('Please enter your email');
+    return;
+  }
+  
+  if (!email.includes('@')) {
+    showError('Please enter a valid email');
+    return;
+  }
+  
+  try {
+    const { data, error } = await supabase.auth.signInWithOtp({
+      email: email,
+      options: {
+        shouldCreateUser: true
+      }
+    });
+    
+    if (error) throw error;
+    
+    currentEmail = email;
+    emailSection.style.display = 'none';
+    otpSection.style.display = 'block';
+    showSuccess('OTP sent to your email! Please check your inbox.');
+  } catch (error) {
+    showError(error.message);
+  }
+};
+
+// Verify OTP
+document.getElementById('verifyOtpBtn').onclick = async () => {
+  const otp = otpInput.value.trim();
+  hideMessages();
+  
+  if (!otp || otp.length !== 6) {
+    showError('Please enter the 6-digit OTP code');
+    return;
+  }
+  
+  try {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: currentEmail,
+      token: otp,
+      type: 'email'
+    });
+    
+    if (error) throw error;
+    
+    showUserProfile(data.user, 'Email OTP');
+  } catch (error) {
+    showError('Invalid OTP code. Please try again.');
+  }
+};
+
+// Back to email
+document.getElementById('backToEmail').onclick = () => {
+  otpSection.style.display = 'none';
+  emailSection.style.display = 'block';
+  otpInput.value = '';
+  hideMessages();
+};
+
+// Google Login
+document.getElementById('googleBtn').onclick = async () => {
+  hideMessages();
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.href
+      }
+    });
+    if (error) throw error;
+  } catch (error) {
+    showError(error.message);
+  }
+};
+
+// Twitter Login
+document.getElementById('twitterBtn').onclick = async () => {
+  hideMessages();
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'twitter',
+      options: {
+        redirectTo: window.location.href
+      }
+    });
+    if (error) throw error;
+  } catch (error) {
+    showError(error.message);
+  }
+};
+
+// Discord Login
+document.getElementById('discordBtn').onclick = async () => {
+  hideMessages();
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'discord',
+      options: {
+        redirectTo: window.location.href
+      }
+    });
+    if (error) throw error;
+  } catch (error) {
+    showError(error.message);
+  }
+};
+
+// Connect Wallet (MetaMask)
+document.getElementById('walletBtn').onclick = async () => {
+  hideMessages();
+  
+  if (typeof window.ethereum === 'undefined') {
+    showError('Please install MetaMask or another Web3 wallet');
+    return;
+  }
+  
+  try {
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const accounts = await provider.send("eth_requestAccounts", []);
+    const address = accounts[0];
+    const signer = provider.getSigner();
+    
+    // Create a message to sign
+    const message = `Sign this message to login to Ugly Cat Chain\n\nWallet: ${address}\nTimestamp: ${Date.now()}`;
+    const signature = await signer.signMessage(message);
+    
+    // Here you would typically verify the signature on your backend
+    // For now, we'll just show the profile with wallet info
+    showUserProfile({
+      id: address,
+      email: address,
+      user_metadata: { wallet: address }
+    }, 'Wallet', address);
+    
+  } catch (error) {
+    if (error.code === 4001) {
+      showError('Wallet connection cancelled');
+    } else {
+      showError('Failed to connect wallet: ' + error.message);
+    }
+  }
+};
+
+// Show user profile
+function showUserProfile(user, method, wallet = null) {
+  loginCard.style.display = 'none';
+  avatar.style.display = 'flex';
+  
+  const displayText = user.email || user.id;
+  avatar.textContent = displayText[0].toUpperCase();
+  
+  document.getElementById('userEmail').textContent = displayText;
+  document.getElementById('loginMethod').textContent = method;
+  
+  if (wallet) {
+    document.getElementById('walletInfo').style.display = 'block';
+    document.getElementById('walletAddress').textContent = wallet.substring(0, 6) + '...' + wallet.substring(wallet.length - 4);
+  } else {
+    document.getElementById('walletInfo').style.display = 'none';
+  }
+}
+
+// Check if user is already logged in
+supabase.auth.getSession().then(({ data: { session } }) => {
+  if (session) {
+    const method = session.user.app_metadata.provider || 'Email OTP';
+    showUserProfile(session.user, method.charAt(0).toUpperCase() + method.slice(1));
+  }
+});
+
+// Listen for auth state changes
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN' && session) {
+    const method = session.user.app_metadata.provider || 'Email OTP';
+    showUserProfile(session.user, method.charAt(0).toUpperCase() + method.slice(1));
+  }
+});
+
+// Avatar click - show profile
+avatar.onclick = () => profilePopup.style.display = 'flex';
+document.getElementById('closeProfile').onclick = () => profilePopup.style.display = 'none';
+
+// Logout
+document.getElementById('logoutBtn').onclick = async () => {
+  await supabase.auth.signOut();
+  profilePopup.style.display = 'none';
+  loginCard.style.display = 'block';
+  avatar.style.display = 'none';
+  emailInput.value = '';
+  otpInput.value = '';
+  emailSection.style.display = 'block';
+  otpSection.style.display = 'none';
+  hideMessages();
+};
+</script>
+
+</body>
+</html>
