@@ -231,28 +231,25 @@ display:flex;align-items:center;gap:12px;margin:20px 0;color:var(--muted);font-s
 
 <!-- PROFILE POPUP -->
 <div class="popup" id="profilePopup">
-<div class="popup-card">
+<div class="popup-card" style="max-width:400px">
 <h3>Your Profile</h3>
 <p><strong>Email/ID</strong><br><span id="userEmail"></span></p>
 <p><strong>Login Method</strong><br><span id="loginMethod"></span></p>
-<p id="evmWalletInfo"><strong>EVM Wallet</strong><br><span id="evmWalletAddress"></span></p>
-<p id="solanaWalletInfo"><strong>Solana Wallet</strong><br><span id="solanaWalletAddress"></span></p>
-<p id="walletInfo" style="display:none"><strong>Connected Wallet</strong><br><span id="walletAddress"></span></p>
-<button id="showMnemonicBtn" style="margin-top:8px">Show Mnemonic</button><br/>
-<button id="exportWalletBtn" style="margin-top:8px">Export Wallet Info</button><br/>
-<button id="logoutBtn">Logout</button><br/>
-<button id="closeProfile">Close</button>
-</div>
+
+<div id="generatedWalletsSection" style="margin-top:16px">
+<p><strong>EVM Wallet Address</strong><br><span id="evmWalletAddress" style="font-size:.85rem;word-break:break-all"></span></p>
+<p style="margin-top:12px"><strong>Solana Wallet Address</strong><br><span id="solanaWalletAddress" style="font-size:.85rem;word-break:break-all"></span></p>
 </div>
 
-<!-- MNEMONIC POPUP -->
-<div class="popup" id="mnemonicPopup">
-<div class="popup-card" style="max-width:480px">
-<h3>⚠️ Secret Recovery Phrase</h3>
-<p style="color:var(--text);background:var(--bg);padding:16px;border-radius:12px;font-size:.9rem;word-break:break-word;line-height:1.6" id="mnemonicPhrase"></p>
-<p style="color:#ff6b6b;font-size:.85rem;margin-top:12px">⚠️ Never share this phrase! Anyone with this phrase can access your funds.</p>
-<button id="copyMnemonicBtn">Copy to Clipboard</button><br/>
-<button id="closeMnemonic">Close</button>
+<p id="connectedWalletInfo" style="display:none;margin-top:12px"><strong>Connected Wallet</strong><br><span id="walletAddress" style="font-size:.85rem;word-break:break-all"></span></p>
+
+<div id="walletActionsSection" style="display:none;margin-top:16px">
+<button id="copyMnemonicBtn" style="margin-bottom:8px">Copy Mnemonic</button><br/>
+<button id="exportWalletBtn" style="margin-bottom:8px">Export Wallet</button><br/>
+</div>
+
+<button id="logoutBtn">Logout</button><br/>
+<button id="closeProfile">Close</button>
 </div>
 </div>
 
@@ -656,35 +653,27 @@ function showUserProfile(user, method, wallets = null) {
   
   // Show connected wallet (MetaMask)
   if (connectedWallet) {
-    document.getElementById('walletInfo').style.display = 'block';
-    document.getElementById('walletAddress').textContent = `${connectedWallet.substring(0, 6)}...${connectedWallet.substring(connectedWallet.length - 4)}`;
-  } else {
-    document.getElementById('walletInfo').style.display = 'none';
-  }
-  
-  // Show generated wallets (EVM & Solana)
-  if (generatedWallets) {
+    document.getElementById('connectedWalletInfo').style.display = 'block';
+    document.getElementById('walletAddress').textContent = connectedWallet;
+    document.getElementById('generatedWalletsSection').style.display = 'none';
+    document.getElementById('walletActionsSection').style.display = 'none';
+  } else if (generatedWallets) {
+    // Show generated wallets (EVM & Solana)
     currentWallets = generatedWallets;
     
-    // EVM Wallet
-    if (generatedWallets.evm_address) {
-      document.getElementById('evmWalletInfo').style.display = 'block';
-      const evmAddr = generatedWallets.evm_address;
-      document.getElementById('evmWalletAddress').textContent = `${evmAddr.substring(0, 6)}...${evmAddr.substring(evmAddr.length - 4)}`;
-    }
+    document.getElementById('generatedWalletsSection').style.display = 'block';
+    document.getElementById('connectedWalletInfo').style.display = 'none';
     
-    // Solana Wallet
-    if (generatedWallets.solana_address) {
-      document.getElementById('solanaWalletInfo').style.display = 'block';
-      const solAddr = generatedWallets.solana_address;
-      document.getElementById('solanaWalletAddress').textContent = `${solAddr.substring(0, 6)}...${solAddr.substring(solAddr.length - 4)}`;
-    }
+    // Display full addresses
+    document.getElementById('evmWalletAddress').textContent = generatedWallets.evm_address;
+    document.getElementById('solanaWalletAddress').textContent = generatedWallets.solana_address;
     
-    document.getElementById('exportWalletBtn').style.display = 'inline-block';
+    // Show wallet action buttons
+    document.getElementById('walletActionsSection').style.display = 'block';
   } else {
-    document.getElementById('evmWalletInfo').style.display = 'none';
-    document.getElementById('solanaWalletInfo').style.display = 'none';
-    document.getElementById('exportWalletBtn').style.display = 'none';
+    document.getElementById('generatedWalletsSection').style.display = 'none';
+    document.getElementById('connectedWalletInfo').style.display = 'none';
+    document.getElementById('walletActionsSection').style.display = 'none';
   }
 }
 
@@ -751,7 +740,23 @@ window.addEventListener('load', async () => {
   }
 });
 
-// Export wallet private keys
+// Copy Mnemonic to Clipboard
+document.getElementById('copyMnemonicBtn').onclick = () => {
+  if (!currentWallets || !currentWallets.mnemonic) {
+    showError('No mnemonic available');
+    return;
+  }
+  
+  const mnemonic = currentWallets.mnemonic;
+  navigator.clipboard.writeText(mnemonic).then(() => {
+    showSuccess('Mnemonic copied to clipboard! Keep it safe!');
+  }).catch(err => {
+    showError('Failed to copy mnemonic');
+    console.error('Copy error:', err);
+  });
+};
+
+// Export Wallet Info
 document.getElementById('exportWalletBtn').onclick = () => {
   if (!currentWallets) {
     showError('No wallets to export');
@@ -771,7 +776,7 @@ document.getElementById('exportWalletBtn').onclick = () => {
       derivationPath: currentWallets.solana_path
     },
     warning: '⚠️ KEEP THIS SAFE! Never share your mnemonic or private keys with anyone!',
-    info: 'You can restore both wallets using the mnemonic phrase in any compatible wallet.'
+    info: 'You can restore both wallets using the mnemonic phrase in any compatible wallet (MetaMask, Phantom, Trust Wallet, etc).'
   };
   
   // Create downloadable JSON file
@@ -784,33 +789,7 @@ document.getElementById('exportWalletBtn').onclick = () => {
   link.click();
   URL.revokeObjectURL(url);
   
-  showSuccess('Wallet backup exported! Keep your mnemonic phrase safe!');
-};
-
-// Show Mnemonic Popup
-document.getElementById('showMnemonicBtn').onclick = () => {
-  if (!currentWallets || !currentWallets.mnemonic) {
-    showError('No mnemonic available');
-    return;
-  }
-  
-  document.getElementById('mnemonicPhrase').textContent = currentWallets.mnemonic;
-  document.getElementById('mnemonicPopup').style.display = 'flex';
-};
-
-// Close Mnemonic Popup
-document.getElementById('closeMnemonic').onclick = () => {
-  document.getElementById('mnemonicPopup').style.display = 'none';
-};
-
-// Copy Mnemonic
-document.getElementById('copyMnemonicBtn').onclick = () => {
-  const mnemonic = currentWallets.mnemonic;
-  navigator.clipboard.writeText(mnemonic).then(() => {
-    showSuccess('Mnemonic copied to clipboard!');
-  }).catch(err => {
-    showError('Failed to copy mnemonic');
-  });
+  showSuccess('Wallet backup exported successfully!');
 };
 
 // Avatar click - show profile
